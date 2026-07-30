@@ -15,6 +15,10 @@
 
 ---
 
+## Preview
+
+![Preview do jogo Nebula Quest](https://api.microlink.io/?url=https://nebula-quest-game.vercel.app&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1280&viewport.height=800&waitFor=2000)
+
 ## Sobre o projeto
 
 **Nebula Quest** começou como uma landing page fictícia de um jogo espacial retrô — e virou o jogo de verdade. Esta é a versão jogável: um **shoot 'em up de rolagem vertical**, no estilo clássico de Sonic Wings / Aero Fighters, construído com [Phaser](https://phaser.io) rodando dentro de uma aplicação Next.js.
