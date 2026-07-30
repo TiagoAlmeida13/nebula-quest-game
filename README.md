@@ -17,26 +17,27 @@
 
 ## Sobre o projeto
 
-**Nebula Quest** começou como uma landing page fictícia de um jogo espacial retrô — e virou o jogo de verdade. Esta é a versão jogável: uma fase de plataforma 2D construída com [Phaser](https://phaser.io), rodando dentro de uma aplicação Next.js.
+**Nebula Quest** começou como uma landing page fictícia de um jogo espacial retrô — e virou o jogo de verdade. Esta é a versão jogável: um **shoot 'em up de rolagem vertical**, no estilo clássico de Sonic Wings / Aero Fighters, construído com [Phaser](https://phaser.io) rodando dentro de uma aplicação Next.js.
 
-O objetivo foi sair da "estética de jogo" para a **mecânica de jogo** de fato: física de colisão, gravidade, coleta de itens, um inimigo com padrão de movimento simples, e condições de vitória e derrota — os fundamentos de qualquer jogo 2D.
+O objetivo foi sair da "estética de jogo" para a **mecânica de jogo** de fato: movimento livre em 4 direções sem gravidade, tiro automático, spawn contínuo de inimigos vindos do topo da tela, fundo estrelado com scroll infinito, coleta de itens bônus, e condições de vitória e derrota.
 
 ## Como jogar
 
-- **Setas ← →** — mover a nave
-- **Seta ↑** — pular
-- Colete os **3 cristais** espalhados pelas plataformas
-- Evite o **inimigo roxo** patrulhando o caminho
-- Chegue ao **portal** no topo do mapa para vencer
+- **Setas ← → ↑ ↓** — pilotar a nave livremente pela tela
+- A nave **atira automaticamente** para cima enquanto o jogo roda
+- Destrua **12 naves inimigas** para vencer
+- Colete os **cristais amarelos** que caem para ganhar pontos bônus
+- Evite colidir com qualquer nave inimiga — um só encostão encerra o jogo
 - **R** — reiniciar a qualquer momento após vitória ou derrota
 
 ## Funcionalidades técnicas
 
-- **Física arcade** (gravidade, colisão, bounce) via Phaser
+- **Física arcade sem gravidade** — movimento livre em 4 direções, como um shooter de verdade, não um platformer
+- **Sistema de spawn por temporizador** (`Time.TimerEvent`) para inimigos e cristais, em intervalos independentes
+- **Scroll infinito de fundo** via `TileSprite`, simulando voo contínuo através do espaço
+- **Tiro automático com cooldown**, controlado por tempo de jogo (não input do jogador)
 - **Carregamento client-only** do Phaser dentro do Next.js, evitando conflito com Server-Side Rendering
-- **Texturas geradas por código** (sem nenhum arquivo de imagem — sprites são retângulos coloridos desenhados via `Graphics` e convertidos em textura)
-- **Animação de flutuação** dos cristais com tweens
-- **IA simples de patrulha** do inimigo (inverte direção ao atingir os limites de uma zona)
+- **Texturas geradas por código** — nave do jogador, naves inimigas e efeitos de propulsor são todos desenhados via `Graphics` e convertidos em textura, sem nenhum arquivo de imagem
 - **Máquina de estados do jogo**: em andamento, vitória, derrota, reinício
 
 ## Tecnologias
