@@ -30,7 +30,7 @@ export default class MainScene extends Phaser.Scene {
   }
 
   preload() {
-    this.createShipTexture("player", 34, 30, COLORS.player);
+    this.createShipTexture("player", 40, 44, COLORS.player);
     this.createTexture("platform", 120, 24, COLORS.platform);
     this.createTexture("crystal", 20, 20, COLORS.crystal);
     this.createEnemyTexture("enemy", 28, 28, COLORS.enemy);
@@ -46,27 +46,50 @@ export default class MainScene extends Phaser.Scene {
     gfx.destroy();
   }
 
-  // desenha uma naves triangular com "cockpit" e bordas, em vez de um retângulo
+  // nave estilo caça estelar (asas laterais + fuselagem central + motores gêmeos)
   createShipTexture(key: string, w: number, h: number, color: number) {
     const gfx = this.add.graphics();
 
-    // corpo da nave (triângulo apontando pra cima)
+    // asa esquerda
     gfx.fillStyle(color, 1);
     gfx.beginPath();
-    gfx.moveTo(w / 2, 0);
-    gfx.lineTo(w, h * 0.8);
-    gfx.lineTo(w / 2, h * 0.6);
-    gfx.lineTo(0, h * 0.8);
+    gfx.moveTo(w * 0.1, h * 0.9);
+    gfx.lineTo(w * 0.42, h * 0.55);
+    gfx.lineTo(w * 0.42, h * 0.85);
     gfx.closePath();
     gfx.fillPath();
 
-    // cockpit (janela)
-    gfx.fillStyle(0xffffff, 0.9);
-    gfx.fillCircle(w / 2, h * 0.42, w * 0.14);
+    // asa direita
+    gfx.beginPath();
+    gfx.moveTo(w * 0.9, h * 0.9);
+    gfx.lineTo(w * 0.58, h * 0.55);
+    gfx.lineTo(w * 0.58, h * 0.85);
+    gfx.closePath();
+    gfx.fillPath();
 
-    // saída do propulsor
-    gfx.fillStyle(0x0d0221, 1);
-    gfx.fillRect(w * 0.35, h * 0.75, w * 0.3, h * 0.2);
+    // fuselagem central, alongada e afilada no nariz
+    gfx.beginPath();
+    gfx.moveTo(w * 0.5, 0);
+    gfx.lineTo(w * 0.62, h * 0.35);
+    gfx.lineTo(w * 0.58, h * 0.95);
+    gfx.lineTo(w * 0.42, h * 0.95);
+    gfx.lineTo(w * 0.38, h * 0.35);
+    gfx.closePath();
+    gfx.fillPath();
+
+    // cockpit
+    gfx.fillStyle(0x9be8ff, 0.95);
+    gfx.fillEllipse(w * 0.5, h * 0.32, w * 0.16, h * 0.22);
+
+    // detalhe das asas (listras neon)
+    gfx.fillStyle(0xffffff, 0.5);
+    gfx.fillRect(w * 0.2, h * 0.72, w * 0.16, 2);
+    gfx.fillRect(w * 0.64, h * 0.72, w * 0.16, 2);
+
+    // motores gêmeos (brilho, atrás das asas)
+    gfx.fillStyle(0xffe45e, 1);
+    gfx.fillCircle(w * 0.32, h * 0.92, 4);
+    gfx.fillCircle(w * 0.68, h * 0.92, 4);
 
     gfx.generateTexture(key, w, h);
     gfx.destroy();
@@ -106,18 +129,18 @@ export default class MainScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(80, 400, "player");
     this.player.setBounce(0.1);
     this.player.setCollideWorldBounds(true);
-    this.player.setSize(24, 24).setOffset(5, 4);
+    this.player.setSize(22, 30).setOffset(9, 10);
 
-    // rastro de partículas do propulsor, atrás da nave
+    // rastro de partículas do propulsor, atrás da nave, contínuo
     this.thrusterParticles = this.add.particles(0, 0, "spark", {
-      lifespan: 260,
-      speed: { min: 40, max: 90 },
-      scale: { start: 1, end: 0 },
-      alpha: { start: 0.9, end: 0 },
-      angle: { min: 80, max: 100 },
-      frequency: -1,
+      lifespan: 220,
+      speed: { min: 20, max: 50 },
+      scale: { start: 0.8, end: 0 },
+      alpha: { start: 0.7, end: 0 },
+      angle: { min: 85, max: 95 },
+      frequency: 40,
       follow: this.player,
-      followOffset: { x: 0, y: 14 },
+      followOffset: { x: 0, y: 20 },
     });
 
     this.crystals = this.physics.add.group();
@@ -218,7 +241,6 @@ export default class MainScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     if (this.cursors.up.isDown && body.blocked.down) {
       this.player.setVelocityY(JUMP_VELOCITY);
-      this.thrusterParticles.explode(8);
     }
   }
 }
