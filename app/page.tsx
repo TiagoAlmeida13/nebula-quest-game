@@ -8,7 +8,7 @@ export default function Home() {
           NEBULA QUEST
         </h1>
         <p className="mt-2 text-sm text-[#f4f1ff]/60">
-          Setas para mover e pular · Colete os 3 cristais · Evite o inimigo roxo
+          Setas para voar · Tiro automático · Derrote 12 naves inimigas
         </p>
       </div>
 

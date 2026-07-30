@@ -2,37 +2,46 @@ import Phaser from "phaser";
 
 const COLORS = {
   player: 0xff2e97,
-  platform: 0x21e6c1,
-  crystal: 0xffe45e,
   enemy: 0xa239ea,
-  goal: 0x21e6c1,
+  bullet: 0x9be8ff,
+  crystal: 0xffe45e,
+  spark: 0xffe45e,
 };
 
-const JUMP_VELOCITY = -480;
-const PLAYER_SPEED = 220;
+const PLAYER_SPEED = 260;
+const BULLET_SPEED = 420;
+const ENEMY_SPEED = 90;
+const ENEMIES_TO_WIN = 12;
 
 export default class MainScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private bullets!: Phaser.Physics.Arcade.Group;
+  private enemies!: Phaser.Physics.Arcade.Group;
   private crystals!: Phaser.Physics.Arcade.Group;
-  private enemy!: Phaser.Physics.Arcade.Sprite;
-  private goal!: Phaser.Physics.Arcade.Sprite;
+  private starfield!: Phaser.GameObjects.TileSprite;
+  private thrusterParticles!: Phaser.GameObjects.Particles.ParticleEmitter;
   private scoreText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
+
   private score = 0;
+  private defeated = 0;
   private gameOver = false;
-  private enemyDirection = 1;
+  private lastShot = 0;
+  private enemySpawnTimer!: Phaser.Time.TimerEvent;
+  private crystalSpawnTimer!: Phaser.Time.TimerEvent;
 
   constructor() {
     super("MainScene");
   }
 
   preload() {
-    this.createTexture("player", 28, 36, COLORS.player);
-    this.createTexture("platform", 120, 24, COLORS.platform);
-    this.createTexture("crystal", 20, 20, COLORS.crystal);
-    this.createTexture("enemy", 28, 28, COLORS.enemy);
-    this.createTexture("goal", 32, 48, COLORS.goal);
+    this.createShipTexture("player", 40, 44, COLORS.player);
+    this.createEnemyShipTexture("enemy", 32, 36, COLORS.enemy);
+    this.createTexture("bullet", 5, 14, COLORS.bullet);
+    this.createTexture("crystal", 18, 18, COLORS.crystal);
+    this.createTexture("spark", 6, 6, COLORS.spark);
+    this.createStarTexture();
   }
 
   createTexture(key: string, w: number, h: number, color: number) {
@@ -43,150 +52,257 @@ export default class MainScene extends Phaser.Scene {
     gfx.destroy();
   }
 
+  createStarTexture() {
+    const gfx = this.add.graphics();
+    gfx.fillStyle(0x0d0221, 1);
+    gfx.fillRect(0, 0, 100, 100);
+    gfx.fillStyle(0xffffff, 0.8);
+    for (let i = 0; i < 14; i++) {
+      const x = Phaser.Math.Between(0, 100);
+      const y = Phaser.Math.Between(0, 100);
+      const s = Phaser.Math.Between(1, 2);
+      gfx.fillRect(x, y, s, s);
+    }
+    gfx.generateTexture("stars", 100, 100);
+    gfx.destroy();
+  }
+
+  createShipTexture(key: string, w: number, h: number, color: number) {
+    const gfx = this.add.graphics();
+    gfx.fillStyle(color, 1);
+    gfx.beginPath();
+    gfx.moveTo(w * 0.1, h * 0.9);
+    gfx.lineTo(w * 0.42, h * 0.55);
+    gfx.lineTo(w * 0.42, h * 0.85);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.beginPath();
+    gfx.moveTo(w * 0.9, h * 0.9);
+    gfx.lineTo(w * 0.58, h * 0.55);
+    gfx.lineTo(w * 0.58, h * 0.85);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.beginPath();
+    gfx.moveTo(w * 0.5, 0);
+    gfx.lineTo(w * 0.62, h * 0.35);
+    gfx.lineTo(w * 0.58, h * 0.95);
+    gfx.lineTo(w * 0.42, h * 0.95);
+    gfx.lineTo(w * 0.38, h * 0.35);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.fillStyle(0x9be8ff, 0.95);
+    gfx.fillEllipse(w * 0.5, h * 0.32, w * 0.16, h * 0.22);
+    gfx.fillStyle(0xffe45e, 1);
+    gfx.fillCircle(w * 0.32, h * 0.92, 4);
+    gfx.fillCircle(w * 0.68, h * 0.92, 4);
+    gfx.generateTexture(key, w, h);
+    gfx.destroy();
+  }
+
+  // nave inimiga, formato similar mas invertida (aponta pra baixo) e mais angulosa
+  createEnemyShipTexture(key: string, w: number, h: number, color: number) {
+    const gfx = this.add.graphics();
+    gfx.fillStyle(color, 1);
+    gfx.beginPath();
+    gfx.moveTo(w * 0.5, h);
+    gfx.lineTo(w * 0.62, h * 0.6);
+    gfx.lineTo(w * 0.58, 0);
+    gfx.lineTo(w * 0.42, 0);
+    gfx.lineTo(w * 0.38, h * 0.6);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.beginPath();
+    gfx.moveTo(w * 0.05, h * 0.15);
+    gfx.lineTo(w * 0.4, h * 0.45);
+    gfx.lineTo(w * 0.4, h * 0.15);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.beginPath();
+    gfx.moveTo(w * 0.95, h * 0.15);
+    gfx.lineTo(w * 0.6, h * 0.45);
+    gfx.lineTo(w * 0.6, h * 0.15);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.fillStyle(0xffffff, 0.85);
+    gfx.fillEllipse(w * 0.5, h * 0.65, w * 0.14, h * 0.18);
+    gfx.generateTexture(key, w, h);
+    gfx.destroy();
+  }
+
   create() {
     this.score = 0;
+    this.defeated = 0;
     this.gameOver = false;
-    this.enemyDirection = 1;
+    this.lastShot = 0;
 
-    // plataformas em formato de escada, cada degrau alcançável pelo pulo
-    const platforms = this.physics.add.staticGroup();
-    platforms.create(400, 470, "platform").setScale(8, 1).refreshBody();
-    platforms.create(200, 380, "platform"); // degrau 1
-    platforms.create(420, 300, "platform"); // degrau 2
-    platforms.create(200, 220, "platform"); // degrau 3
-    platforms.create(420, 140, "platform"); // degrau 4 (topo)
+    this.starfield = this.add.tileSprite(400, 240, 800, 480, "stars").setDepth(-1);
 
-    // jogador
-    this.player = this.physics.add.sprite(80, 400, "player");
-    this.player.setBounce(0.1);
+    this.player = this.physics.add.sprite(400, 420, "player");
     this.player.setCollideWorldBounds(true);
+    this.player.setSize(22, 30).setOffset(9, 10);
 
-    // cristais, um por degrau (exceto o topo)
-    this.crystals = this.physics.add.group();
-    [
-      [200, 340],
-      [420, 260],
-      [200, 180],
-    ].forEach(([x, y]) => {
-      const crystal = this.crystals.create(x, y, "crystal");
-      crystal.setBounce(0.4);
-      (crystal.body as Phaser.Physics.Arcade.Body).allowGravity = false;
-      this.tweens.add({
-        targets: crystal,
-        y: y - 10,
-        duration: 700,
-        yoyo: true,
-        repeat: -1,
-        ease: "sine.inout",
-      });
+    this.thrusterParticles = this.add.particles(0, 0, "spark", {
+      lifespan: 220,
+      speed: { min: 20, max: 50 },
+      scale: { start: 0.8, end: 0 },
+      alpha: { start: 0.7, end: 0 },
+      angle: { min: 85, max: 95 },
+      frequency: 40,
+      follow: this.player,
+      followOffset: { x: 0, y: 20 },
     });
 
-    // inimigo patrulhando o degrau 2 (o mais no meio do caminho)
-    this.enemy = this.physics.add.sprite(420, 274, "enemy");
-    this.enemy.setCollideWorldBounds(true);
-    this.enemy.setVelocityX(70);
+    this.bullets = this.physics.add.group();
+    this.enemies = this.physics.add.group();
+    this.crystals = this.physics.add.group();
 
-    // meta / portal no topo
-    this.goal = this.physics.add.sprite(420, 90, "goal");
-    this.goal.setImmovable(true);
-    (this.goal.body as Phaser.Physics.Arcade.Body).allowGravity = false;
+    this.physics.add.overlap(this.bullets, this.enemies, this.hitEnemyWithBullet, undefined, this);
+    this.physics.add.overlap(this.player, this.enemies, this.hitPlayer, undefined, this);
+    this.physics.add.overlap(this.player, this.crystals, this.collectCrystal, undefined, this);
 
-    // colisões
-    this.physics.add.collider(this.player, platforms);
-    this.physics.add.collider(this.enemy, platforms);
-
-    this.physics.add.overlap(
-      this.player,
-      this.crystals,
-      this.collectCrystal,
-      undefined,
-      this,
-    );
-    this.physics.add.collider(
-      this.player,
-      this.enemy,
-      this.hitEnemy,
-      undefined,
-      this,
-    );
-    this.physics.add.overlap(
-      this.player,
-      this.goal,
-      this.winGame,
-      undefined,
-      this,
-    );
-
-    // controles
     this.cursors = this.input.keyboard!.createCursorKeys();
 
-    // UI
-    this.scoreText = this.add.text(16, 16, "Cristais: 0 / 3", {
+    this.scoreText = this.add.text(16, 16, "Pontos: 0", {
       fontFamily: "monospace",
       fontSize: "20px",
       color: "#f4f1ff",
     });
 
+    this.add.text(16, 42, `Inimigos: 0 / ${ENEMIES_TO_WIN}`, {
+      fontFamily: "monospace",
+      fontSize: "16px",
+      color: "#f4f1ff99",
+    }).setName("defeatedText");
+
     this.statusText = this.add
       .text(400, 240, "", {
         fontFamily: "monospace",
-        fontSize: "32px",
+        fontSize: "30px",
         color: "#ffe45e",
         align: "center",
       })
       .setOrigin(0.5);
+
+    this.enemySpawnTimer = this.time.addEvent({
+      delay: 900,
+      loop: true,
+      callback: this.spawnEnemy,
+      callbackScope: this,
+    });
+
+    this.crystalSpawnTimer = this.time.addEvent({
+      delay: 2600,
+      loop: true,
+      callback: this.spawnCrystal,
+      callbackScope: this,
+    });
 
     this.input.keyboard!.on("keydown-R", () => {
       if (this.gameOver) this.scene.restart();
     });
   }
 
-  collectCrystal(_player: unknown, crystal: unknown) {
-    (crystal as Phaser.Physics.Arcade.Sprite).destroy();
-    this.score += 1;
-    this.scoreText.setText(`Cristais: ${this.score} / 3`);
+  spawnEnemy() {
+    if (this.gameOver) return;
+    const x = Phaser.Math.Between(40, 760);
+    const enemy = this.enemies.create(x, -30, "enemy") as Phaser.Physics.Arcade.Sprite;
+    enemy.setVelocityY(ENEMY_SPEED);
+    enemy.setSize(20, 24).setOffset(6, 6);
   }
 
-  hitEnemy() {
+  spawnCrystal() {
+    if (this.gameOver) return;
+    const x = Phaser.Math.Between(40, 760);
+    const crystal = this.crystals.create(x, -20, "crystal") as Phaser.Physics.Arcade.Sprite;
+    crystal.setVelocityY(120);
+  }
+
+  shoot(time: number) {
+    if (time < this.lastShot + 220) return;
+    this.lastShot = time;
+    const bullet = this.bullets.create(this.player.x, this.player.y - 26, "bullet") as Phaser.Physics.Arcade.Sprite;
+    bullet.setVelocityY(-BULLET_SPEED);
+  }
+
+  hitEnemyWithBullet(bullet: unknown, enemy: unknown) {
+    (bullet as Phaser.Physics.Arcade.Sprite).destroy();
+    (enemy as Phaser.Physics.Arcade.Sprite).destroy();
+    this.score += 10;
+    this.defeated += 1;
+    this.scoreText.setText(`Pontos: ${this.score}`);
+    (this.children.getByName("defeatedText") as Phaser.GameObjects.Text).setText(
+      `Inimigos: ${this.defeated} / ${ENEMIES_TO_WIN}`
+    );
+
+    if (this.defeated >= ENEMIES_TO_WIN) {
+      this.winGame();
+    }
+  }
+
+  collectCrystal(_player: unknown, crystal: unknown) {
+    (crystal as Phaser.Physics.Arcade.Sprite).destroy();
+    this.score += 25;
+    this.scoreText.setText(`Pontos: ${this.score}`);
+  }
+
+  hitPlayer() {
     if (this.gameOver) return;
     this.gameOver = true;
     this.physics.pause();
+    this.enemySpawnTimer.remove();
+    this.crystalSpawnTimer.remove();
     this.player.setTint(0xff0000);
-    this.statusText.setText(
-      "VOCÊ FOI ATINGIDO\n\nPressione R para tentar de novo",
-    );
+    this.statusText.setText("VOCÊ FOI ATINGIDO\n\nPressione R para tentar de novo");
   }
 
   winGame() {
     if (this.gameOver) return;
-    if (this.score < 3) return;
     this.gameOver = true;
     this.physics.pause();
-    this.statusText.setText(
-      "VOCÊ VENCEU! 🎉\n\nPressione R para jogar de novo",
-    );
+    this.enemySpawnTimer.remove();
+    this.crystalSpawnTimer.remove();
+    this.statusText.setText("VOCÊ VENCEU! 🎉\n\nPressione R para jogar de novo");
   }
 
-  update() {
+  update(time: number) {
     if (this.gameOver) return;
 
-    // patrulha do inimigo dentro do degrau 2
-    if (this.enemy.x > 470) this.enemyDirection = -1;
-    if (this.enemy.x < 370) this.enemyDirection = 1;
-    this.enemy.setVelocityX(70 * this.enemyDirection);
+    this.starfield.tilePositionY -= 2;
 
-    // movimento do jogador
     if (this.cursors.left.isDown) {
       this.player.setVelocityX(-PLAYER_SPEED);
+      this.player.setFlipX(true);
     } else if (this.cursors.right.isDown) {
       this.player.setVelocityX(PLAYER_SPEED);
+      this.player.setFlipX(false);
     } else {
       this.player.setVelocityX(0);
     }
 
-    const body = this.player.body as Phaser.Physics.Arcade.Body;
-    if (this.cursors.up.isDown && body.blocked.down) {
-      this.player.setVelocityY(JUMP_VELOCITY);
+    if (this.cursors.up.isDown) {
+      this.player.setVelocityY(-PLAYER_SPEED);
+    } else if (this.cursors.down.isDown) {
+      this.player.setVelocityY(PLAYER_SPEED);
+    } else {
+      this.player.setVelocityY(0);
     }
+
+    this.shoot(time);
+
+   // limpa balas e inimigos que saíram da tela
+    this.bullets.getChildren().forEach((b) => {
+      const bullet = b as Phaser.Physics.Arcade.Sprite;
+      if (bullet.y < -20) bullet.destroy();
+    });
+
+    this.enemies.getChildren().forEach((e) => {
+      const enemy = e as Phaser.Physics.Arcade.Sprite;
+      if (enemy.y > 520) enemy.destroy();
+    });
+
+    this.crystals.getChildren().forEach((c) => {
+      const crystal = c as Phaser.Physics.Arcade.Sprite;
+      if (crystal.y > 520) crystal.destroy();
+    });
   }
 }

@@ -22,7 +22,7 @@ export default function Game() {
         parent: containerRef.current,
         physics: {
           default: "arcade",
-          arcade: { gravity: { x: 0, y: 700 }, debug: false },
+          arcade: { gravity: { x: 0, y: 0 }, debug: false },
         },
         scene: [MainScene],
         backgroundColor: "#0d0221",
