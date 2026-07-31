@@ -14,6 +14,7 @@ const ENEMY_SPEED = 90;
 const ENEMIES_TO_WIN = 12;
 const BOSS_MAX_HEALTH = 20;
 const BOSS_BULLET_SPEED = 260;
+const BOSS_BAR_WIDTH = 256;
 
 export default class MainScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -275,18 +276,15 @@ export default class MainScene extends Phaser.Scene {
     this.bossActive = true;
     this.enemySpawnTimer.remove();
 
+    // limpa os inimigos comuns restantes, evitando que uma bala acerte
+    // dois alvos (inimigo + chefe) ao mesmo tempo
+    this.enemies.getChildren().forEach((e) => {
+      (e as Phaser.Physics.Arcade.Sprite).destroy();
+    });
+
     this.boss = this.physics.add.sprite(400, -60, "boss");
     this.boss.setCollideWorldBounds(true);
     this.boss.setSize(70, 60).setOffset(10, 10);
-    this.physics.add.overlap(this.bullets, this.boss, this.hitBossWithBullet, undefined, this);
-    this.physics.add.overlap(this.player, this.boss, this.hitPlayer, undefined, this);
-
-    this.tweens.add({
-      targets: this.boss,
-      y: 90,
-      duration: 1200,
-      ease: "sine.out",
-    });
 
     this.bossLabel = this.add
       .text(400, 60, "IMPERADOR DO VAZIO", {
@@ -296,8 +294,24 @@ export default class MainScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.bossHealthBarBg = this.add.rectangle(400, 78, 260, 12, 0x1a1030).setStrokeStyle(2, 0xff2e97);
-    this.bossHealthBarFill = this.add.rectangle(400, 78, 256, 8, 0xff2e97);
+    // barra com origem à esquerda: mais simples e sem "pulo" ao encolher
+    this.bossHealthBarBg = this.add
+      .rectangle(400 - BOSS_BAR_WIDTH / 2, 78, BOSS_BAR_WIDTH + 4, 12, 0x1a1030)
+      .setOrigin(0, 0.5)
+      .setStrokeStyle(2, 0xff2e97);
+    this.bossHealthBarFill = this.add
+      .rectangle(400 - BOSS_BAR_WIDTH / 2, 78, BOSS_BAR_WIDTH, 8, 0xff2e97)
+      .setOrigin(0, 0.5);
+
+    this.tweens.add({
+      targets: this.boss,
+      y: 90,
+      duration: 1200,
+      ease: "sine.out",
+    });
+
+    this.physics.add.overlap(this.bullets, this.boss, this.hitBossWithBullet, undefined, this);
+    this.physics.add.overlap(this.player, this.boss, this.hitPlayer, undefined, this);
 
     this.bossShootTimer = this.time.addEvent({
       delay: 1100,
@@ -322,8 +336,14 @@ export default class MainScene extends Phaser.Scene {
   }
 
   hitEnemyWithBullet(bullet: unknown, enemy: unknown) {
-    (bullet as Phaser.Physics.Arcade.Sprite).destroy();
-    (enemy as Phaser.Physics.Arcade.Sprite).destroy();
+    const b = bullet as Phaser.Physics.Arcade.Sprite;
+    const e = enemy as Phaser.Physics.Arcade.Sprite;
+    // evita processar duas vezes o mesmo par, caso a bala já tenha
+    // sido destruída por outra colisão no mesmo instante
+    if (!b.active || !e.active) return;
+
+    b.destroy();
+    e.destroy();
     this.score += 10;
     this.defeated += 1;
     this.scoreText.setText(`Pontos: ${this.score}`);
@@ -335,13 +355,16 @@ export default class MainScene extends Phaser.Scene {
   }
 
   hitBossWithBullet(bullet: unknown, _boss: unknown) {
-    (bullet as Phaser.Physics.Arcade.Sprite).destroy();
+    const b = bullet as Phaser.Physics.Arcade.Sprite;
+    if (!b.active) return;
+
+    b.destroy();
     this.bossHealth -= 1;
     this.score += 5;
     this.scoreText.setText(`Pontos: ${this.score}`);
 
     const ratio = Math.max(this.bossHealth, 0) / BOSS_MAX_HEALTH;
-    this.bossHealthBarFill.width = 256 * ratio;
+    this.bossHealthBarFill.width = BOSS_BAR_WIDTH * ratio;
 
     if (this.bossHealth <= 0) {
       this.winGame();
@@ -349,7 +372,9 @@ export default class MainScene extends Phaser.Scene {
   }
 
   collectCrystal(_player: unknown, crystal: unknown) {
-    (crystal as Phaser.Physics.Arcade.Sprite).destroy();
+    const c = crystal as Phaser.Physics.Arcade.Sprite;
+    if (!c.active) return;
+    c.destroy();
     this.score += 25;
     this.scoreText.setText(`Pontos: ${this.score}`);
   }
@@ -406,9 +431,9 @@ export default class MainScene extends Phaser.Scene {
       if (this.boss.x < 120) this.bossDirection = 1;
       this.boss.setVelocityX(120 * this.bossDirection);
 
-      this.bossHealthBarBg.x = this.boss.x;
-      this.bossHealthBarFill.x = this.boss.x - (256 - this.bossHealthBarFill.width) / 2;
       this.bossLabel.x = this.boss.x;
+      this.bossHealthBarBg.x = this.boss.x - BOSS_BAR_WIDTH / 2;
+      this.bossHealthBarFill.x = this.boss.x - BOSS_BAR_WIDTH / 2;
     }
 
     this.bullets.getChildren().forEach((b) => {
