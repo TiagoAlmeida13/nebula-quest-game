@@ -10,7 +10,6 @@ const COLORS = {
 
 const PLAYER_SPEED = 260;
 const BULLET_SPEED = 420;
-const ENEMIES_TO_WIN = 12;
 const BOSS_MAX_HEALTH = 20;
 const BOSS_BULLET_SPEED = 260;
 const BOSS_BAR_WIDTH = 300;
@@ -20,18 +19,25 @@ const CRYSTALS_PER_POWER_LEVEL = 3;
 const MAX_POWER_LEVEL = 2;
 const CRYSTALS_PER_SHIELD = 6;
 
-// níveis de dificuldade: quanto mais inimigos derrotados, mais dura fica a onda
-type DifficultyTier = {
-  spawnDelay: number;
-  enemySpeed: number;
-  zigzagChance: number;
+// coreografia da fase: cada onda tem uma formação, contagem e velocidade próprias
+type WaveType = "line" | "v" | "diagonal" | "zigzagSquad";
+
+type WaveDef = {
+  type: WaveType;
+  count: number;
+  speed: number;
+  gapAfter: number; // pausa até a próxima onda, em ms
 };
 
-const DIFFICULTY_TIERS: DifficultyTier[] = [
-  { spawnDelay: 900, enemySpeed: 90, zigzagChance: 0 },
-  { spawnDelay: 750, enemySpeed: 115, zigzagChance: 0.2 },
-  { spawnDelay: 600, enemySpeed: 140, zigzagChance: 0.4 },
-  { spawnDelay: 480, enemySpeed: 165, zigzagChance: 0.6 },
+const WAVES: WaveDef[] = [
+  { type: "line", count: 4, speed: 90, gapAfter: 2200 },
+  { type: "v", count: 5, speed: 100, gapAfter: 2200 },
+  { type: "diagonal", count: 5, speed: 110, gapAfter: 2000 },
+  { type: "line", count: 6, speed: 120, gapAfter: 2000 },
+  { type: "zigzagSquad", count: 5, speed: 110, gapAfter: 2000 },
+  { type: "v", count: 6, speed: 130, gapAfter: 1800 },
+  { type: "diagonal", count: 6, speed: 140, gapAfter: 1800 },
+  { type: "zigzagSquad", count: 6, speed: 150, gapAfter: 1600 },
 ];
 
 export default class MainScene extends Phaser.Scene {
@@ -46,7 +52,7 @@ export default class MainScene extends Phaser.Scene {
   private thrusterParticles!: Phaser.GameObjects.Particles.ParticleEmitter;
   private shieldRing!: Phaser.GameObjects.Arc;
   private scoreText!: Phaser.GameObjects.Text;
-  private defeatedText!: Phaser.GameObjects.Text;
+  private waveText!: Phaser.GameObjects.Text;
   private powerText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private bossHealthBarBg?: Phaser.GameObjects.Rectangle;
@@ -54,7 +60,6 @@ export default class MainScene extends Phaser.Scene {
   private bossLabel?: Phaser.GameObjects.Text;
 
   private score = 0;
-  private defeated = 0;
   private gameOver = false;
   private bossActive = false;
   private bossHealth = BOSS_MAX_HEALTH;
@@ -64,7 +69,8 @@ export default class MainScene extends Phaser.Scene {
   private powerLevel = 0;
   private shields = 0;
   private invulnerableUntil = 0;
-  private enemySpawnEvent?: Phaser.Time.TimerEvent;
+  private waveNumber = 0;
+  private currentWaveEvent?: Phaser.Time.TimerEvent;
   private crystalSpawnTimer!: Phaser.Time.TimerEvent;
   private bossShootTimer?: Phaser.Time.TimerEvent;
 
@@ -205,7 +211,6 @@ export default class MainScene extends Phaser.Scene {
 
   create() {
     this.score = 0;
-    this.defeated = 0;
     this.gameOver = false;
     this.bossActive = false;
     this.bossHealth = BOSS_MAX_HEALTH;
@@ -215,6 +220,7 @@ export default class MainScene extends Phaser.Scene {
     this.powerLevel = 0;
     this.shields = 0;
     this.invulnerableUntil = 0;
+    this.waveNumber = 0;
     this.boss = undefined;
     this.bossHealthBarBg = undefined;
     this.bossHealthBarFill = undefined;
@@ -259,7 +265,7 @@ export default class MainScene extends Phaser.Scene {
       color: "#f4f1ff",
     });
 
-    this.defeatedText = this.add.text(16, 42, `Inimigos: 0 / ${ENEMIES_TO_WIN}`, {
+    this.waveText = this.add.text(16, 42, `Onda: 0 / ${WAVES.length}`, {
       fontFamily: "monospace",
       fontSize: "16px",
       color: "#f4f1ff99",
@@ -280,8 +286,6 @@ export default class MainScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.scheduleNextEnemySpawn();
-
     this.crystalSpawnTimer = this.time.addEvent({
       delay: 2600,
       loop: true,
@@ -289,47 +293,100 @@ export default class MainScene extends Phaser.Scene {
       callbackScope: this,
     });
 
+    this.runWaveSequence(0);
+
     this.input.keyboard!.on("keydown-R", () => {
       if (this.gameOver) this.scene.restart();
     });
   }
 
-  // calcula a dificuldade atual com base em quantos inimigos já foram derrotados
-  getDifficultyTier(): DifficultyTier {
-    const tierIndex = Math.min(
-      Math.floor(this.defeated / 3),
-      DIFFICULTY_TIERS.length - 1
+  // avança pela lista de ondas; ao terminar, agenda a chegada do chefe
+  runWaveSequence(index: number) {
+    if (this.gameOver || this.bossActive) return;
+
+    if (index >= WAVES.length) {
+      this.currentWaveEvent = this.time.delayedCall(1500, () => this.spawnBoss());
+      return;
+    }
+
+    const wave = WAVES[index];
+    this.waveNumber = index + 1;
+    this.waveText.setText(`Onda: ${this.waveNumber} / ${WAVES.length}`);
+
+    switch (wave.type) {
+      case "line":
+        this.spawnLineFormation(wave.count, wave.speed);
+        break;
+      case "v":
+        this.spawnVFormation(wave.count, wave.speed);
+        break;
+      case "diagonal":
+        this.spawnDiagonalFormation(wave.count, wave.speed);
+        break;
+      case "zigzagSquad":
+        this.spawnZigzagFormation(wave.count, wave.speed);
+        break;
+    }
+
+    this.currentWaveEvent = this.time.delayedCall(wave.gapAfter, () =>
+      this.runWaveSequence(index + 1)
     );
-    return DIFFICULTY_TIERS[tierIndex];
   }
 
-  // agenda o próximo spawn de inimigo, com atraso variável de acordo com a dificuldade
-  scheduleNextEnemySpawn() {
-    if (this.gameOver || this.bossActive) return;
-
-    const tier = this.getDifficultyTier();
-    this.enemySpawnEvent = this.time.delayedCall(tier.spawnDelay, () => {
-      this.spawnEnemy();
-      this.scheduleNextEnemySpawn();
-    });
-  }
-
-  spawnEnemy() {
-    if (this.gameOver || this.bossActive) return;
-
-    const tier = this.getDifficultyTier();
-    const x = Phaser.Math.Between(40, 760);
-    const enemy = this.enemies.create(x, -30, "enemy") as Phaser.Physics.Arcade.Sprite;
-    enemy.setVelocityY(tier.enemySpeed);
+  spawnEnemyAt(x: number, y: number, speed: number, zigzag: boolean) {
+    const enemy = this.enemies.create(x, y, "enemy") as Phaser.Physics.Arcade.Sprite;
+    enemy.setVelocityY(speed);
     enemy.setSize(20, 24).setOffset(6, 6);
-
-    // a partir de certa dificuldade, alguns inimigos se movem em zigue-zague
-    const isZigzag = Math.random() < tier.zigzagChance;
-    enemy.setData("zigzag", isZigzag);
-    if (isZigzag) {
+    enemy.setData("zigzag", zigzag);
+    if (zigzag) {
       enemy.setData("baseX", x);
       enemy.setData("zigzagOffset", Math.random() * Math.PI * 2);
       enemy.setTint(0xff8fd6);
+    }
+    return enemy;
+  }
+
+  // linha reta, todos entrando juntos lado a lado
+  spawnLineFormation(count: number, speed: number) {
+    const margin = 80;
+    const spacing = (800 - margin * 2) / Math.max(count - 1, 1);
+    for (let i = 0; i < count; i++) {
+      const x = margin + spacing * i;
+      this.spawnEnemyAt(x, -30, speed, false);
+    }
+  }
+
+  // formação em V, ápice na frente, pontas mais atrás
+  spawnVFormation(count: number, speed: number) {
+    const step = 55;
+    const startOffset = -(count - 1) / 2;
+    for (let i = 0; i < count; i++) {
+      const offsetIndex = startOffset + i;
+      const x = 400 + offsetIndex * step;
+      const y = -30 - Math.abs(offsetIndex) * 40;
+      this.spawnEnemyAt(x, y, speed, false);
+    }
+  }
+
+  // varredura diagonal, entrando em sequência de um canto ao outro
+  spawnDiagonalFormation(count: number, speed: number) {
+    const stepX = 90;
+    const stepY = 50;
+    const startX = 100;
+    for (let i = 0; i < count; i++) {
+      const x = startX + i * stepX;
+      const y = -30 - i * stepY;
+      this.spawnEnemyAt(x, y, speed, false);
+    }
+  }
+
+  // esquadrão inteiro em zigue-zague, todos entrando juntos
+  spawnZigzagFormation(count: number, speed: number) {
+    const margin = 100;
+    const spacing = (800 - margin * 2) / Math.max(count - 1, 1);
+    for (let i = 0; i < count; i++) {
+      const x = margin + spacing * i;
+      this.spawnEnemyAt(x, -30, speed, true);
     }
   }
 
@@ -342,7 +399,6 @@ export default class MainScene extends Phaser.Scene {
 
   spawnBoss() {
     this.bossActive = true;
-    this.enemySpawnEvent?.remove();
 
     this.enemies.getChildren().forEach((e) => {
       (e as Phaser.Physics.Arcade.Sprite).destroy();
@@ -429,13 +485,7 @@ export default class MainScene extends Phaser.Scene {
     bullet.destroy();
     enemy.destroy();
     this.score += 10;
-    this.defeated += 1;
     this.scoreText.setText(`Pontos: ${this.score}`);
-    this.defeatedText.setText(`Inimigos: ${this.defeated} / ${ENEMIES_TO_WIN}`);
-
-    if (this.defeated >= ENEMIES_TO_WIN && !this.bossActive) {
-      this.spawnBoss();
-    }
   }
 
   hitBossWithBullet(obj1: unknown, obj2: unknown) {
@@ -511,7 +561,7 @@ export default class MainScene extends Phaser.Scene {
 
     this.gameOver = true;
     this.physics.pause();
-    this.enemySpawnEvent?.remove();
+    this.currentWaveEvent?.remove();
     this.crystalSpawnTimer.remove();
     this.bossShootTimer?.remove();
     this.player.setTint(0xff0000);
@@ -522,7 +572,7 @@ export default class MainScene extends Phaser.Scene {
     if (this.gameOver) return;
     this.gameOver = true;
     this.physics.pause();
-    this.enemySpawnEvent?.remove();
+    this.currentWaveEvent?.remove();
     this.crystalSpawnTimer.remove();
     this.bossShootTimer?.remove();
     this.boss?.setTint(0xff0000);
@@ -562,7 +612,6 @@ export default class MainScene extends Phaser.Scene {
       this.boss.setVelocityX(120 * this.bossDirection);
     }
 
-    // aplica o movimento em zigue-zague aos inimigos marcados
     this.enemies.getChildren().forEach((e) => {
       const enemy = e as Phaser.Physics.Arcade.Sprite;
       if (enemy.getData("zigzag")) {
