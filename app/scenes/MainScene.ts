@@ -10,12 +10,29 @@ const COLORS = {
 
 const PLAYER_SPEED = 260;
 const BULLET_SPEED = 420;
-const ENEMY_SPEED = 90;
 const ENEMIES_TO_WIN = 12;
 const BOSS_MAX_HEALTH = 20;
 const BOSS_BULLET_SPEED = 260;
 const BOSS_BAR_WIDTH = 300;
-const BOSS_BAR_X = 250; // canto esquerdo fixo da barra, no topo
+const BOSS_BAR_X = 250;
+
+const CRYSTALS_PER_POWER_LEVEL = 3;
+const MAX_POWER_LEVEL = 2;
+const CRYSTALS_PER_SHIELD = 6;
+
+// níveis de dificuldade: quanto mais inimigos derrotados, mais dura fica a onda
+type DifficultyTier = {
+  spawnDelay: number;
+  enemySpeed: number;
+  zigzagChance: number;
+};
+
+const DIFFICULTY_TIERS: DifficultyTier[] = [
+  { spawnDelay: 900, enemySpeed: 90, zigzagChance: 0 },
+  { spawnDelay: 750, enemySpeed: 115, zigzagChance: 0.2 },
+  { spawnDelay: 600, enemySpeed: 140, zigzagChance: 0.4 },
+  { spawnDelay: 480, enemySpeed: 165, zigzagChance: 0.6 },
+];
 
 export default class MainScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -27,8 +44,10 @@ export default class MainScene extends Phaser.Scene {
   private boss?: Phaser.Physics.Arcade.Sprite;
   private starfield!: Phaser.GameObjects.TileSprite;
   private thrusterParticles!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private shieldRing!: Phaser.GameObjects.Arc;
   private scoreText!: Phaser.GameObjects.Text;
   private defeatedText!: Phaser.GameObjects.Text;
+  private powerText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private bossHealthBarBg?: Phaser.GameObjects.Rectangle;
   private bossHealthBarFill?: Phaser.GameObjects.Rectangle;
@@ -41,7 +60,11 @@ export default class MainScene extends Phaser.Scene {
   private bossHealth = BOSS_MAX_HEALTH;
   private bossDirection = 1;
   private lastShot = 0;
-  private enemySpawnTimer!: Phaser.Time.TimerEvent;
+  private crystalsCollected = 0;
+  private powerLevel = 0;
+  private shields = 0;
+  private invulnerableUntil = 0;
+  private enemySpawnEvent?: Phaser.Time.TimerEvent;
   private crystalSpawnTimer!: Phaser.Time.TimerEvent;
   private bossShootTimer?: Phaser.Time.TimerEvent;
 
@@ -188,6 +211,10 @@ export default class MainScene extends Phaser.Scene {
     this.bossHealth = BOSS_MAX_HEALTH;
     this.bossDirection = 1;
     this.lastShot = 0;
+    this.crystalsCollected = 0;
+    this.powerLevel = 0;
+    this.shields = 0;
+    this.invulnerableUntil = 0;
     this.boss = undefined;
     this.bossHealthBarBg = undefined;
     this.bossHealthBarFill = undefined;
@@ -209,6 +236,10 @@ export default class MainScene extends Phaser.Scene {
       follow: this.player,
       followOffset: { x: 0, y: 20 },
     });
+
+    this.shieldRing = this.add.circle(this.player.x, this.player.y, 28, 0x9be8ff, 0.18);
+    this.shieldRing.setStrokeStyle(2, 0x9be8ff, 0.9);
+    this.shieldRing.setVisible(false);
 
     this.bullets = this.physics.add.group();
     this.enemies = this.physics.add.group();
@@ -234,6 +265,12 @@ export default class MainScene extends Phaser.Scene {
       color: "#f4f1ff99",
     });
 
+    this.powerText = this.add.text(16, 64, "Tiro: Nível 1 · Escudos: 0", {
+      fontFamily: "monospace",
+      fontSize: "16px",
+      color: "#9be8ff",
+    });
+
     this.statusText = this.add
       .text(400, 240, "", {
         fontFamily: "monospace",
@@ -243,12 +280,7 @@ export default class MainScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.enemySpawnTimer = this.time.addEvent({
-      delay: 900,
-      loop: true,
-      callback: this.spawnEnemy,
-      callbackScope: this,
-    });
+    this.scheduleNextEnemySpawn();
 
     this.crystalSpawnTimer = this.time.addEvent({
       delay: 2600,
@@ -262,12 +294,43 @@ export default class MainScene extends Phaser.Scene {
     });
   }
 
+  // calcula a dificuldade atual com base em quantos inimigos já foram derrotados
+  getDifficultyTier(): DifficultyTier {
+    const tierIndex = Math.min(
+      Math.floor(this.defeated / 3),
+      DIFFICULTY_TIERS.length - 1
+    );
+    return DIFFICULTY_TIERS[tierIndex];
+  }
+
+  // agenda o próximo spawn de inimigo, com atraso variável de acordo com a dificuldade
+  scheduleNextEnemySpawn() {
+    if (this.gameOver || this.bossActive) return;
+
+    const tier = this.getDifficultyTier();
+    this.enemySpawnEvent = this.time.delayedCall(tier.spawnDelay, () => {
+      this.spawnEnemy();
+      this.scheduleNextEnemySpawn();
+    });
+  }
+
   spawnEnemy() {
     if (this.gameOver || this.bossActive) return;
+
+    const tier = this.getDifficultyTier();
     const x = Phaser.Math.Between(40, 760);
     const enemy = this.enemies.create(x, -30, "enemy") as Phaser.Physics.Arcade.Sprite;
-    enemy.setVelocityY(ENEMY_SPEED);
+    enemy.setVelocityY(tier.enemySpeed);
     enemy.setSize(20, 24).setOffset(6, 6);
+
+    // a partir de certa dificuldade, alguns inimigos se movem em zigue-zague
+    const isZigzag = Math.random() < tier.zigzagChance;
+    enemy.setData("zigzag", isZigzag);
+    if (isZigzag) {
+      enemy.setData("baseX", x);
+      enemy.setData("zigzagOffset", Math.random() * Math.PI * 2);
+      enemy.setTint(0xff8fd6);
+    }
   }
 
   spawnCrystal() {
@@ -279,7 +342,7 @@ export default class MainScene extends Phaser.Scene {
 
   spawnBoss() {
     this.bossActive = true;
-    this.enemySpawnTimer.remove();
+    this.enemySpawnEvent?.remove();
 
     this.enemies.getChildren().forEach((e) => {
       (e as Phaser.Physics.Arcade.Sprite).destroy();
@@ -335,12 +398,26 @@ export default class MainScene extends Phaser.Scene {
   shoot(time: number) {
     if (time < this.lastShot + 220) return;
     this.lastShot = time;
-    const bullet = this.bullets.create(this.player.x, this.player.y - 26, "bullet") as Phaser.Physics.Arcade.Sprite;
-    bullet.setVelocityY(-BULLET_SPEED);
+
+    if (this.powerLevel === 0) {
+      this.fireBullet(this.player.x, this.player.y - 26, 0);
+    } else if (this.powerLevel === 1) {
+      this.fireBullet(this.player.x - 10, this.player.y - 20, 0);
+      this.fireBullet(this.player.x + 10, this.player.y - 20, 0);
+    } else {
+      this.fireBullet(this.player.x, this.player.y - 26, 0);
+      this.fireBullet(this.player.x - 14, this.player.y - 16, -0.15);
+      this.fireBullet(this.player.x + 14, this.player.y - 16, 0.15);
+    }
   }
 
-  // identifica bala e inimigo pela textura, não pela ordem dos parâmetros
-  // (a v4 do Phaser pode inverter a ordem quando um dos lados é um sprite único)
+  fireBullet(x: number, y: number, angleOffset: number) {
+    const bullet = this.bullets.create(x, y, "bullet") as Phaser.Physics.Arcade.Sprite;
+    const vx = Math.sin(angleOffset) * BULLET_SPEED;
+    const vy = -Math.cos(angleOffset) * BULLET_SPEED;
+    bullet.setVelocity(vx, vy);
+  }
+
   hitEnemyWithBullet(obj1: unknown, obj2: unknown) {
     const a = obj1 as Phaser.Physics.Arcade.Sprite;
     const c = obj2 as Phaser.Physics.Arcade.Sprite;
@@ -391,13 +468,50 @@ export default class MainScene extends Phaser.Scene {
     crystal.destroy();
     this.score += 25;
     this.scoreText.setText(`Pontos: ${this.score}`);
+
+    this.crystalsCollected += 1;
+
+    const newPowerLevel = Math.min(
+      Math.floor(this.crystalsCollected / CRYSTALS_PER_POWER_LEVEL),
+      MAX_POWER_LEVEL
+    );
+    if (newPowerLevel > this.powerLevel) {
+      this.powerLevel = newPowerLevel;
+    }
+
+    if (this.crystalsCollected % CRYSTALS_PER_SHIELD === 0) {
+      this.shields += 1;
+      this.shieldRing.setVisible(true);
+    }
+
+    this.powerText.setText(
+      `Tiro: Nível ${this.powerLevel + 1} · Escudos: ${this.shields}`
+    );
   }
 
-  hitPlayer() {
+  hitPlayer(_a: unknown, _b: unknown) {
     if (this.gameOver) return;
+
+    if (this.time.now < this.invulnerableUntil) return;
+    this.invulnerableUntil = this.time.now + 1200;
+
+    if (this.shields > 0) {
+      this.shields -= 1;
+      this.powerText.setText(
+        `Tiro: Nível ${this.powerLevel + 1} · Escudos: ${this.shields}`
+      );
+      if (this.shields === 0) {
+        this.shieldRing.setVisible(false);
+      }
+
+      this.player.setTint(0x9be8ff);
+      this.time.delayedCall(150, () => this.player.clearTint());
+      return;
+    }
+
     this.gameOver = true;
     this.physics.pause();
-    this.enemySpawnTimer.remove();
+    this.enemySpawnEvent?.remove();
     this.crystalSpawnTimer.remove();
     this.bossShootTimer?.remove();
     this.player.setTint(0xff0000);
@@ -408,7 +522,7 @@ export default class MainScene extends Phaser.Scene {
     if (this.gameOver) return;
     this.gameOver = true;
     this.physics.pause();
-    this.enemySpawnTimer.remove();
+    this.enemySpawnEvent?.remove();
     this.crystalSpawnTimer.remove();
     this.bossShootTimer?.remove();
     this.boss?.setTint(0xff0000);
@@ -440,11 +554,23 @@ export default class MainScene extends Phaser.Scene {
 
     this.shoot(time);
 
+    this.shieldRing.setPosition(this.player.x, this.player.y);
+
     if (this.bossActive && this.boss?.active) {
       if (this.boss.x > 680) this.bossDirection = -1;
       if (this.boss.x < 120) this.bossDirection = 1;
       this.boss.setVelocityX(120 * this.bossDirection);
     }
+
+    // aplica o movimento em zigue-zague aos inimigos marcados
+    this.enemies.getChildren().forEach((e) => {
+      const enemy = e as Phaser.Physics.Arcade.Sprite;
+      if (enemy.getData("zigzag")) {
+        const baseX = enemy.getData("baseX") as number;
+        const offset = enemy.getData("zigzagOffset") as number;
+        enemy.x = baseX + Math.sin(time / 300 + offset) * 80;
+      }
+    });
 
     this.bullets.getChildren().forEach((b) => {
       const bullet = b as Phaser.Physics.Arcade.Sprite;
