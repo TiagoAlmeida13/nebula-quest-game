@@ -11,7 +11,6 @@ const COLORS = {
 
 const PLAYER_SPEED = 260;
 const BULLET_SPEED = 420;
-const BOSS_MAX_HEALTH = 20;
 const BOSS_BULLET_SPEED = 260;
 const BOSS_BAR_WIDTH = 300;
 const BOSS_BAR_X = 250;
@@ -53,6 +52,44 @@ const WAVES: WaveDef[] = [
   },
 ];
 
+type BossPattern = "aimed" | "spread" | "mixed";
+
+type BossDef = {
+  name: string;
+  maxHealth: number;
+  color: number;
+  moveSpeed: number;
+  shootDelay: number;
+  pattern: BossPattern;
+};
+
+const BOSSES: BossDef[] = [
+  {
+    name: "IMPERADOR DO VAZIO",
+    maxHealth: 20,
+    color: 0xa239ea,
+    moveSpeed: 120,
+    shootDelay: 1100,
+    pattern: "aimed",
+  },
+  {
+    name: "GUARDIÃO ESTELAR",
+    maxHealth: 26,
+    color: 0x21e6c1,
+    moveSpeed: 140,
+    shootDelay: 1500,
+    pattern: "spread",
+  },
+  {
+    name: "NÚCLEO PRIMORDIAL",
+    maxHealth: 34,
+    color: 0xff2e97,
+    moveSpeed: 160,
+    shootDelay: 900,
+    pattern: "mixed",
+  },
+];
+
 export default class MainScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -78,7 +115,10 @@ export default class MainScene extends Phaser.Scene {
   private score = 0;
   private gameOver = false;
   private bossActive = false;
-  private bossHealth = BOSS_MAX_HEALTH;
+  private bossIndex = 0;
+  private bossMaxHealth = BOSSES[0].maxHealth;
+  private bossHealth = BOSSES[0].maxHealth;
+  private bossShotCount = 0;
   private bossDirection = 1;
   private lastShot = 0;
   private crystalsCollected = 0;
@@ -97,9 +137,11 @@ export default class MainScene extends Phaser.Scene {
   preload() {
     this.createShipTexture("player", 40, 44, COLORS.player);
     this.createEnemyShipTexture("enemy", 32, 36, COLORS.enemy);
-    this.createBossTexture("boss", 90, 80, COLORS.enemy);
+    BOSSES.forEach((def, i) => {
+      this.createBossTexture(`boss${i}`, 90, 80, def.color);
+    });
     this.createTexture("bullet", 5, 14, COLORS.bullet);
-    this.createTexture("bossBullet", 8, 16, 0xff2e97);
+    this.createTexture("bossBullet", 8, 16, 0xffffff);
     this.createTexture("enemyBullet", 5, 12, 0xa239ea);
     this.createTexture("crystal", 18, 18, COLORS.crystal);
     this.createTexture("spark", 6, 6, COLORS.spark);
@@ -230,7 +272,10 @@ export default class MainScene extends Phaser.Scene {
     this.score = 0;
     this.gameOver = false;
     this.bossActive = false;
-    this.bossHealth = BOSS_MAX_HEALTH;
+    this.bossIndex = 0;
+    this.bossMaxHealth = BOSSES[0].maxHealth;
+    this.bossHealth = BOSSES[0].maxHealth;
+    this.bossShotCount = 0;
     this.bossDirection = 1;
     this.lastShot = 0;
     this.crystalsCollected = 0;
@@ -392,7 +437,7 @@ export default class MainScene extends Phaser.Scene {
 
     if (index >= WAVES.length) {
       this.currentWaveEvent = this.time.delayedCall(1500, () =>
-        this.spawnBoss(),
+        this.spawnBoss(0),
       );
       return;
     }
@@ -515,33 +560,49 @@ export default class MainScene extends Phaser.Scene {
     crystal.setVelocityY(120);
   }
 
-  spawnBoss() {
+  // inicia o chefe de índice `index` na lista BOSSES
+  spawnBoss(index: number) {
     this.bossActive = true;
+    this.bossIndex = index;
+    const def = BOSSES[index];
+    this.bossMaxHealth = def.maxHealth;
+    this.bossHealth = def.maxHealth;
+    this.bossShotCount = 0;
 
     this.enemies.getChildren().forEach((e) => {
       (e as Phaser.Physics.Arcade.Sprite).destroy();
     });
 
-    this.boss = this.physics.add.sprite(400, -60, "boss");
+    this.boss = this.physics.add.sprite(400, -60, `boss${index}`);
     this.boss.setCollideWorldBounds(true);
     this.boss.setSize(70, 60).setOffset(10, 10);
 
-    this.bossLabel = this.add
-      .text(400, 60, "IMPERADOR DO VAZIO", {
-        fontFamily: "monospace",
-        fontSize: "14px",
-        color: "#ff2e97",
-      })
-      .setOrigin(0.5);
+    if (!this.bossLabel) {
+      this.bossLabel = this.add
+        .text(400, 60, def.name, {
+          fontFamily: "monospace",
+          fontSize: "14px",
+          color: "#ff2e97",
+        })
+        .setOrigin(0.5);
+    } else {
+      this.bossLabel.setText(def.name);
+    }
 
-    this.bossHealthBarBg = this.add
-      .rectangle(BOSS_BAR_X, 80, BOSS_BAR_WIDTH + 4, 12, 0x1a1030)
-      .setOrigin(0, 0.5)
-      .setStrokeStyle(2, 0xff2e97);
+    if (!this.bossHealthBarBg) {
+      this.bossHealthBarBg = this.add
+        .rectangle(BOSS_BAR_X, 80, BOSS_BAR_WIDTH + 4, 12, 0x1a1030)
+        .setOrigin(0, 0.5)
+        .setStrokeStyle(2, 0xff2e97);
+    }
 
-    this.bossHealthBarFill = this.add
-      .rectangle(BOSS_BAR_X + 2, 80, BOSS_BAR_WIDTH, 8, 0xff2e97)
-      .setOrigin(0, 0.5);
+    if (!this.bossHealthBarFill) {
+      this.bossHealthBarFill = this.add
+        .rectangle(BOSS_BAR_X + 2, 80, BOSS_BAR_WIDTH, 8, 0xff2e97)
+        .setOrigin(0, 0.5);
+    } else {
+      this.bossHealthBarFill.width = BOSS_BAR_WIDTH;
+    }
 
     this.tweens.add({
       targets: this.boss,
@@ -565,8 +626,9 @@ export default class MainScene extends Phaser.Scene {
       this,
     );
 
+    this.bossShootTimer?.remove();
     this.bossShootTimer = this.time.addEvent({
-      delay: 1100,
+      delay: def.shootDelay,
       loop: true,
       callback: this.bossShoot,
       callbackScope: this,
@@ -575,6 +637,24 @@ export default class MainScene extends Phaser.Scene {
 
   bossShoot() {
     if (this.gameOver || !this.boss || !this.boss.active) return;
+    const def = BOSSES[this.bossIndex];
+    this.bossShotCount++;
+
+    if (def.pattern === "aimed") {
+      this.fireBossBulletAimed();
+    } else if (def.pattern === "spread") {
+      this.fireBossBulletSpread();
+    } else {
+      if (this.bossShotCount % 2 === 0) {
+        this.fireBossBulletSpread();
+      } else {
+        this.fireBossBulletAimed();
+      }
+    }
+  }
+
+  fireBossBulletAimed() {
+    if (!this.boss) return;
     const bullet = this.bossBullets.create(
       this.boss.x,
       this.boss.y + 30,
@@ -592,6 +672,22 @@ export default class MainScene extends Phaser.Scene {
       BOSS_BULLET_SPEED,
       bullet.body.velocity,
     );
+  }
+
+  fireBossBulletSpread() {
+    if (!this.boss) return;
+    const offsets = [-0.35, 0, 0.35];
+    offsets.forEach((offset) => {
+      const bullet = this.bossBullets.create(
+        this.boss!.x,
+        this.boss!.y + 30,
+        "bossBullet",
+      ) as Phaser.Physics.Arcade.Sprite;
+      if (!bullet || !bullet.body) return;
+      const vx = Math.sin(offset) * BOSS_BULLET_SPEED;
+      const vy = Math.cos(offset) * BOSS_BULLET_SPEED;
+      bullet.setVelocity(vx, vy);
+    });
   }
 
   shoot(time: number) {
@@ -651,13 +747,31 @@ export default class MainScene extends Phaser.Scene {
     this.score += 5;
     this.scoreText.setText(`Pontos: ${this.score}`);
 
-    const ratio = this.bossHealth / BOSS_MAX_HEALTH;
+    const ratio = this.bossHealth / this.bossMaxHealth;
     this.bossHealthBarFill.width = BOSS_BAR_WIDTH * ratio;
 
     if (this.bossHealth <= 0) {
-      this.winGame();
+      this.defeatBoss();
     } else {
       this.sfx.enemyExplode();
+    }
+  }
+
+  // chefe atual derrotado: avança pro próximo, ou vence o jogo se era o último
+  defeatBoss() {
+    this.bossShootTimer?.remove();
+    this.boss?.destroy();
+    this.score += 100;
+    this.scoreText.setText(`Pontos: ${this.score}`);
+    this.sfx.bossExplode();
+
+    const nextIndex = this.bossIndex + 1;
+
+    if (nextIndex < BOSSES.length) {
+      this.bossLabel?.setText(`${BOSSES[this.bossIndex].name} DERROTADO!`);
+      this.time.delayedCall(2000, () => this.spawnBoss(nextIndex));
+    } else {
+      this.winGame();
     }
   }
 
@@ -733,11 +847,10 @@ export default class MainScene extends Phaser.Scene {
     this.currentWaveEvent?.remove();
     this.crystalSpawnTimer.remove();
     this.bossShootTimer?.remove();
-    this.boss?.setTint(0xff0000);
+    this.bossLabel?.setText("");
     this.statusText.setText(
-      "VOCÊ DERROTOU O IMPERADOR! 🎉\n\nPressione R para jogar de novo",
+      "VOCÊ DERROTOU OS 3 GUARDIÕES DO VAZIO! 🎉\n\nPressione R para jogar de novo",
     );
-    this.sfx.bossExplode();
     this.sfx.win();
     this.sfx.stopMusic();
   }
@@ -770,9 +883,10 @@ export default class MainScene extends Phaser.Scene {
     this.shieldRing.setPosition(this.player.x, this.player.y);
 
     if (this.bossActive && this.boss?.active) {
+      const def = BOSSES[this.bossIndex];
       if (this.boss.x > 680) this.bossDirection = -1;
       if (this.boss.x < 120) this.bossDirection = 1;
-      this.boss.setVelocityX(120 * this.bossDirection);
+      this.boss.setVelocityX(def.moveSpeed * this.bossDirection);
     }
 
     this.enemies.getChildren().forEach((e) => {
