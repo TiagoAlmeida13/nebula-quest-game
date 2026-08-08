@@ -20,6 +20,10 @@ export default function Game() {
         width: 800,
         height: 480,
         parent: containerRef.current,
+        scale: {
+          mode: Phaser.Scale.FIT,
+          autoCenter: Phaser.Scale.CENTER_BOTH,
+        },
         physics: {
           default: "arcade",
           arcade: { gravity: { x: 0, y: 0 }, debug: false },
@@ -38,5 +42,11 @@ export default function Game() {
     };
   }, []);
 
-  return <div ref={containerRef} className="mx-auto w-fit" />;
+  return (
+    <div
+      ref={containerRef}
+      className="mx-auto w-full max-w-[800px] touch-none"
+      style={{ aspectRatio: "800 / 480" }}
+    />
+  );
 }

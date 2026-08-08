@@ -21,8 +21,8 @@ export default function Home() {
         >
           NEBULA QUEST
         </h1>
-        <p className="mt-4 text-sm text-[#f4f1ff]/60">
-          Setas para voar · Tiro automático · Derrote 12 naves inimigas
+        <p className="mt-2 text-sm text-[#f4f1ff]/60">
+          Setas ou toque e arraste para voar · Tiro automático
         </p>
       </div>
 
