@@ -24,6 +24,9 @@ export default function Game() {
           mode: Phaser.Scale.FIT,
           autoCenter: Phaser.Scale.CENTER_BOTH,
         },
+        input: {
+          activePointers: 2,
+        },
         physics: {
           default: "arcade",
           arcade: { gravity: { x: 0, y: 0 }, debug: false },

@@ -399,6 +399,26 @@ export default class MainScene extends Phaser.Scene {
         this.muteText.setText(newMuted ? "🔇 (M)" : "🔊 (M)");
       });
 
+    const debugText = this.add.text(16, 460, "aguardando toque...", {
+      fontFamily: "monospace",
+      fontSize: "12px",
+      color: "#ffe45e",
+    });
+
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      debugText.setText(
+        `DOWN x:${Math.round(pointer.x)} y:${Math.round(pointer.y)}`,
+      );
+    });
+
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.isDown) {
+        debugText.setText(
+          `MOVE x:${Math.round(pointer.x)} y:${Math.round(pointer.y)}`,
+        );
+      }
+    });
+
     this.statusText = this.add
       .text(400, 240, "", {
         fontFamily: "monospace",
@@ -879,40 +899,40 @@ export default class MainScene extends Phaser.Scene {
 
     this.starfield.tilePositionY -= 2;
 
-   if (this.isDragging) {
-  const dx = this.touchTarget.x - this.player.x;
-  const dy = this.touchTarget.y - this.player.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+    if (this.isDragging) {
+      const dx = this.touchTarget.x - this.player.x;
+      const dy = this.touchTarget.y - this.player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
 
-  if (dist > 4) {
-    const angle = Math.atan2(dy, dx);
-    this.player.setVelocity(
-      Math.cos(angle) * PLAYER_SPEED,
-      Math.sin(angle) * PLAYER_SPEED
-    );
-    this.player.setFlipX(dx < 0);
-  } else {
-    this.player.setVelocity(0, 0);
-  }
-} else {
-  if (this.cursors.left.isDown) {
-    this.player.setVelocityX(-PLAYER_SPEED);
-    this.player.setFlipX(true);
-  } else if (this.cursors.right.isDown) {
-    this.player.setVelocityX(PLAYER_SPEED);
-    this.player.setFlipX(false);
-  } else {
-    this.player.setVelocityX(0);
-  }
+      if (dist > 4) {
+        const angle = Math.atan2(dy, dx);
+        this.player.setVelocity(
+          Math.cos(angle) * PLAYER_SPEED,
+          Math.sin(angle) * PLAYER_SPEED,
+        );
+        this.player.setFlipX(dx < 0);
+      } else {
+        this.player.setVelocity(0, 0);
+      }
+    } else {
+      if (this.cursors.left.isDown) {
+        this.player.setVelocityX(-PLAYER_SPEED);
+        this.player.setFlipX(true);
+      } else if (this.cursors.right.isDown) {
+        this.player.setVelocityX(PLAYER_SPEED);
+        this.player.setFlipX(false);
+      } else {
+        this.player.setVelocityX(0);
+      }
 
-  if (this.cursors.up.isDown) {
-    this.player.setVelocityY(-PLAYER_SPEED);
-  } else if (this.cursors.down.isDown) {
-    this.player.setVelocityY(PLAYER_SPEED);
-  } else {
-    this.player.setVelocityY(0);
-  }
-}
+      if (this.cursors.up.isDown) {
+        this.player.setVelocityY(-PLAYER_SPEED);
+      } else if (this.cursors.down.isDown) {
+        this.player.setVelocityY(PLAYER_SPEED);
+      } else {
+        this.player.setVelocityY(0);
+      }
+    }
 
     this.shoot(time);
 
