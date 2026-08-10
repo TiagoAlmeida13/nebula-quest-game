@@ -399,26 +399,6 @@ export default class MainScene extends Phaser.Scene {
         this.muteText.setText(newMuted ? "🔇 (M)" : "🔊 (M)");
       });
 
-    const debugText = this.add.text(16, 460, "aguardando toque...", {
-      fontFamily: "monospace",
-      fontSize: "12px",
-      color: "#ffe45e",
-    });
-
-    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      debugText.setText(
-        `DOWN x:${Math.round(pointer.x)} y:${Math.round(pointer.y)}`,
-      );
-    });
-
-    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.isDown) {
-        debugText.setText(
-          `MOVE x:${Math.round(pointer.x)} y:${Math.round(pointer.y)}`,
-        );
-      }
-    });
-
     this.statusText = this.add
       .text(400, 240, "", {
         fontFamily: "monospace",
@@ -451,23 +431,23 @@ export default class MainScene extends Phaser.Scene {
         this.sfx.setMuted(newMuted);
         this.muteText.setText(newMuted ? "🔇 (M)" : "🔊 (M)");
       }
+    });
 
-      this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-        this.sfx.unlock();
-        if (this.muteText.getBounds().contains(pointer.x, pointer.y)) return;
-        if (this.gameOver) return;
-        this.isDragging = true;
-        this.touchTarget.set(pointer.x, pointer.y - 40);
-      });
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      this.sfx.unlock();
+      if (this.muteText.getBounds().contains(pointer.x, pointer.y)) return;
+      if (this.gameOver) return;
+      this.isDragging = true;
+      this.touchTarget.set(pointer.x, pointer.y - 40);
+    });
 
-      this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-        if (!this.isDragging) return;
-        this.touchTarget.set(pointer.x, pointer.y - 40);
-      });
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (!this.isDragging) return;
+      this.touchTarget.set(pointer.x, pointer.y - 40);
+    });
 
-      this.input.on("pointerup", () => {
-        this.isDragging = false;
-      });
+    this.input.on("pointerup", () => {
+      this.isDragging = false;
     });
   }
 
