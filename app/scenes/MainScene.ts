@@ -882,17 +882,17 @@ export default class MainScene extends Phaser.Scene {
     if (this.isDragging) {
       const dx = this.touchTarget.x - this.player.x;
       const dy = this.touchTarget.y - this.player.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (dist > 4) {
-        const angle = Math.atan2(dy, dx);
-        this.player.setVelocity(
-          Math.cos(angle) * PLAYER_SPEED,
-          Math.sin(angle) * PLAYER_SPEED,
-        );
+      // Segue o dedo diretamente (com suavização), em vez de perseguir
+      // o alvo com velocidade fixa — assim a nave acompanha o toque
+      // mesmo em arrastos rápidos.
+      this.player.setVelocity(0, 0);
+      const followFactor = 0.35;
+      this.player.x += dx * followFactor;
+      this.player.y += dy * followFactor;
+
+      if (Math.abs(dx) > 1) {
         this.player.setFlipX(dx < 0);
-      } else {
-        this.player.setVelocity(0, 0);
       }
     } else {
       if (this.cursors.left.isDown) {
