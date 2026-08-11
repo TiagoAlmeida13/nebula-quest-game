@@ -107,6 +107,8 @@ export default class MainScene extends Phaser.Scene {
   private powerText!: Phaser.GameObjects.Text;
   private muteText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
+  private restartButtonBg!: Phaser.GameObjects.Rectangle;
+  private restartButtonText!: Phaser.GameObjects.Text;
   private bossHealthBarBg?: Phaser.GameObjects.Rectangle;
   private bossHealthBarFill?: Phaser.GameObjects.Rectangle;
   private bossLabel?: Phaser.GameObjects.Text;
@@ -400,13 +402,34 @@ export default class MainScene extends Phaser.Scene {
       });
 
     this.statusText = this.add
-      .text(400, 240, "", {
+      .text(400, 220, "", {
         fontFamily: "monospace",
         fontSize: "30px",
         color: "#ffe45e",
         align: "center",
       })
       .setOrigin(0.5);
+
+    this.restartButtonBg = this.add
+      .rectangle(400, 310, 240, 60, 0x1a1a2e, 0.9)
+      .setStrokeStyle(2, 0xffe45e)
+      .setOrigin(0.5)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
+
+    this.restartButtonText = this.add
+      .text(400, 310, "🔄 JOGAR DE NOVO", {
+        fontFamily: "monospace",
+        fontSize: "18px",
+        color: "#ffe45e",
+      })
+      .setOrigin(0.5)
+      .setVisible(false);
+
+    this.restartButtonBg.on("pointerdown", () => {
+      this.sfx.unlock();
+      this.scene.restart();
+    });
 
     this.crystalSpawnTimer = this.time.addEvent({
       delay: 2600,
@@ -852,9 +875,9 @@ export default class MainScene extends Phaser.Scene {
     this.crystalSpawnTimer.remove();
     this.bossShootTimer?.remove();
     this.player.setTint(0xff0000);
-    this.statusText.setText(
-      "VOCÊ FOI ATINGIDO\n\nPressione R para tentar de novo",
-    );
+    this.statusText.setText("VOCÊ FOI ATINGIDO");
+    this.restartButtonBg.setVisible(true);
+    this.restartButtonText.setVisible(true);
     this.sfx.playerHit();
     this.sfx.stopMusic();
   }
@@ -867,9 +890,9 @@ export default class MainScene extends Phaser.Scene {
     this.crystalSpawnTimer.remove();
     this.bossShootTimer?.remove();
     this.bossLabel?.setText("");
-    this.statusText.setText(
-      "VOCÊ DERROTOU OS 3 GUARDIÕES DO VAZIO! 🎉\n\nPressione R para jogar de novo",
-    );
+    this.statusText.setText("VOCÊ DERROTOU OS 3 GUARDIÕES DO VAZIO! 🎉");
+    this.restartButtonBg.setVisible(true);
+    this.restartButtonText.setVisible(true);
     this.sfx.win();
     this.sfx.stopMusic();
   }
