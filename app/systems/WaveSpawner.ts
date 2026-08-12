@@ -1,31 +1,40 @@
 import Phaser from "phaser";
-import { WAVES } from "../config/gameConfig";
+import { WaveDef } from "../config/phases";
 
 export type WaveSpawnerOptions = {
   enemies: Phaser.Physics.Arcade.Group;
   crystals: Phaser.Physics.Arcade.Group;
   isGameOver: () => boolean;
   isBossActive: () => boolean;
+  /** Lista de ondas da fase atual (pode mudar entre fases). */
+  getWaves: () => WaveDef[];
+  /** Chave da textura de inimigo da fase atual (pode mudar entre fases). */
+  getEnemyTextureKey: () => string;
   onWaveChange: (current: number, total: number) => void;
-  /** Chamado quando todas as ondas da lista WAVES já foram lançadas. */
+  /** Chamado quando todas as ondas da fase atual já foram lançadas. */
   onWavesComplete: () => void;
 };
 
 /**
  * Cuida da sequência de ondas de inimigos (linha, V, diagonal, esquadrão
  * em zigue-zague) e do spawn periódico de cristais coletáveis.
+ *
+ * O spawner de cristais roda o jogo inteiro (start()/stop()); já a
+ * sequência de ondas pode ser reiniciada a cada fase via startWaves(),
+ * sem recriar o timer de cristais.
  */
 export class WaveSpawner {
   private scene: Phaser.Scene;
   private options: WaveSpawnerOptions;
   private currentWaveEvent?: Phaser.Time.TimerEvent;
-  private crystalSpawnTimer!: Phaser.Time.TimerEvent;
+  private crystalSpawnTimer?: Phaser.Time.TimerEvent;
 
   constructor(scene: Phaser.Scene, options: WaveSpawnerOptions) {
     this.scene = scene;
     this.options = options;
   }
 
+  /** Chamar uma vez, no início da partida. */
   start() {
     this.crystalSpawnTimer = this.scene.time.addEvent({
       delay: 2600,
@@ -34,6 +43,12 @@ export class WaveSpawner {
       callbackScope: this,
     });
 
+    this.startWaves();
+  }
+
+  /** Chamar no início da partida e de novo a cada troca de fase. */
+  startWaves() {
+    this.currentWaveEvent?.remove();
     this.runWaveSequence(0);
   }
 
@@ -45,15 +60,17 @@ export class WaveSpawner {
   runWaveSequence(index: number) {
     if (this.options.isGameOver() || this.options.isBossActive()) return;
 
-    if (index >= WAVES.length) {
+    const waves = this.options.getWaves();
+
+    if (index >= waves.length) {
       this.currentWaveEvent = this.scene.time.delayedCall(1500, () =>
         this.options.onWavesComplete(),
       );
       return;
     }
 
-    const wave = WAVES[index];
-    this.options.onWaveChange(index + 1, WAVES.length);
+    const wave = waves[index];
+    this.options.onWaveChange(index + 1, waves.length);
 
     switch (wave.type) {
       case "line":
@@ -85,7 +102,7 @@ export class WaveSpawner {
     const enemy = this.options.enemies.create(
       x,
       y,
-      "enemy",
+      this.options.getEnemyTextureKey(),
     ) as Phaser.Physics.Arcade.Sprite;
     enemy.setVelocityY(speed);
     enemy.setSize(20, 24).setOffset(6, 6);

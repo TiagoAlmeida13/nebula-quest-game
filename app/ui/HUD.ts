@@ -27,6 +27,7 @@ export class HUD {
   private bossHealthBarBg?: Phaser.GameObjects.Rectangle;
   private bossHealthBarFill?: Phaser.GameObjects.Rectangle;
   private bossLabel?: Phaser.GameObjects.Text;
+  private phaseLabel = "";
 
   constructor(scene: Phaser.Scene, options: HUDOptions) {
     this.scene = scene;
@@ -121,8 +122,13 @@ export class HUD {
     this.scoreText.setText(`Pontos: ${score}`);
   }
 
+  setPhaseLabel(label: string) {
+    this.phaseLabel = label;
+  }
+
   setWave(current: number, total: number) {
-    this.waveText.setText(`Onda: ${current} / ${total}`);
+    const prefix = this.phaseLabel ? `${this.phaseLabel} · ` : "";
+    this.waveText.setText(`${prefix}Onda: ${current} / ${total}`);
   }
 
   setPower(powerLevel: number, shields: number) {
@@ -164,7 +170,7 @@ export class HUD {
         })
         .setOrigin(0.5);
     } else {
-      this.bossLabel.setText(name);
+      this.bossLabel.setText(name).setVisible(true);
     }
 
     if (!this.bossHealthBarBg) {
@@ -172,6 +178,8 @@ export class HUD {
         .rectangle(BOSS_BAR_X, 80, BOSS_BAR_WIDTH + 4, 12, 0x1a1030)
         .setOrigin(0, 0.5)
         .setStrokeStyle(2, 0xff2e97);
+    } else {
+      this.bossHealthBarBg.setVisible(true);
     }
 
     if (!this.bossHealthBarFill) {
@@ -180,7 +188,15 @@ export class HUD {
         .setOrigin(0, 0.5);
     } else {
       this.bossHealthBarFill.width = BOSS_BAR_WIDTH;
+      this.bossHealthBarFill.setVisible(true);
     }
+  }
+
+  /** Esconde a barra/label de chefe enquanto só há ondas de inimigos na tela. */
+  hideBoss() {
+    this.bossHealthBarBg?.setVisible(false);
+    this.bossHealthBarFill?.setVisible(false);
+    this.bossLabel?.setVisible(false);
   }
 
   setBossHealthRatio(ratio: number) {
@@ -190,9 +206,5 @@ export class HUD {
 
   setBossLabelText(text: string) {
     this.bossLabel?.setText(text);
-  }
-
-  clearBossLabel() {
-    this.bossLabel?.setText("");
   }
 }

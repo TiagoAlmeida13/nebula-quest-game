@@ -18,18 +18,23 @@ export function createTexture(
   gfx.destroy();
 }
 
-export function createStarTexture(scene: Phaser.Scene) {
+export function createStarTexture(
+  scene: Phaser.Scene,
+  key: string,
+  bgColor: number,
+  starColor: number = 0xffffff,
+) {
   const gfx = scene.add.graphics();
-  gfx.fillStyle(0x0d0221, 1);
+  gfx.fillStyle(bgColor, 1);
   gfx.fillRect(0, 0, 100, 100);
-  gfx.fillStyle(0xffffff, 0.8);
+  gfx.fillStyle(starColor, 0.8);
   for (let i = 0; i < 14; i++) {
     const x = Phaser.Math.Between(0, 100);
     const y = Phaser.Math.Between(0, 100);
     const s = Phaser.Math.Between(1, 2);
     gfx.fillRect(x, y, s, s);
   }
-  gfx.generateTexture("stars", 100, 100);
+  gfx.generateTexture(key, 100, 100);
   gfx.destroy();
 }
 

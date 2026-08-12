@@ -1,10 +1,13 @@
 import Phaser from "phaser";
-import { BOSSES, BOSS_BULLET_SPEED } from "../config/gameConfig";
+import { BossDef } from "../config/phases";
+import { BOSS_BULLET_SPEED } from "../config/gameConfig";
 import { HUD } from "../ui/HUD";
 import { SFX } from "../lib/sfx";
 
 export type BossControllerOptions = {
   getPlayer: () => Phaser.Physics.Arcade.Sprite;
+  /** Lista de chefes da fase atual (pode mudar entre fases). */
+  getBosses: () => BossDef[];
   bullets: Phaser.Physics.Arcade.Group;
   bossBullets: Phaser.Physics.Arcade.Group;
   enemies: Phaser.Physics.Arcade.Group;
@@ -12,13 +15,14 @@ export type BossControllerOptions = {
   sfx: SFX;
   onScoreChange: (delta: number) => void;
   onPlayerHit: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback;
-  /** Chamado quando o último chefe da lista é derrotado. */
-  onAllBossesDefeated: () => void;
+  /** Chamado quando o último chefe da fase atual é derrotado. */
+  onPhaseBossesDefeated: () => void;
 };
 
 /**
  * Cuida de um chefe por vez: spawn, movimento lateral, padrões de tiro
- * (mirado / espalhado / misto), dano e progressão para o próximo chefe.
+ * (mirado / espalhado / misto), dano e progressão para o próximo chefe
+ * dentro da fase atual.
  */
 export class BossController {
   boss?: Phaser.Physics.Arcade.Sprite;
@@ -27,8 +31,8 @@ export class BossController {
   private scene: Phaser.Scene;
   private options: BossControllerOptions;
   private bossIndex = 0;
-  private bossMaxHealth = BOSSES[0].maxHealth;
-  private bossHealth = BOSSES[0].maxHealth;
+  private bossMaxHealth = 0;
+  private bossHealth = 0;
   private bossShotCount = 0;
   private bossDirection = 1;
   private bossShootTimer?: Phaser.Time.TimerEvent;
@@ -38,13 +42,14 @@ export class BossController {
     this.options = options;
   }
 
-  /** Chamar no create() da cena, para zerar o estado entre partidas. */
+  /** Chamar no create() da cena e a cada troca de fase, para zerar o estado. */
   reset() {
+    const bosses = this.options.getBosses();
     this.boss = undefined;
     this.active = false;
     this.bossIndex = 0;
-    this.bossMaxHealth = BOSSES[0].maxHealth;
-    this.bossHealth = BOSSES[0].maxHealth;
+    this.bossMaxHealth = bosses[0]?.maxHealth ?? 0;
+    this.bossHealth = this.bossMaxHealth;
     this.bossShotCount = 0;
     this.bossDirection = 1;
     this.bossShootTimer?.remove();
@@ -56,9 +61,12 @@ export class BossController {
   }
 
   spawn(index: number) {
+    const bosses = this.options.getBosses();
+    const def = bosses[index];
+    if (!def) return;
+
     this.active = true;
     this.bossIndex = index;
-    const def = BOSSES[index];
     this.bossMaxHealth = def.maxHealth;
     this.bossHealth = def.maxHealth;
     this.bossShotCount = 0;
@@ -67,7 +75,7 @@ export class BossController {
       (e as Phaser.Physics.Arcade.Sprite).destroy();
     });
 
-    this.boss = this.scene.physics.add.sprite(400, -60, `boss${index}`);
+    this.boss = this.scene.physics.add.sprite(400, -60, def.textureKey);
     this.boss.setCollideWorldBounds(true);
     this.boss.setSize(70, 60).setOffset(10, 10);
 
@@ -107,7 +115,8 @@ export class BossController {
   /** Chamar a cada frame no update() da cena. */
   updateMovement() {
     if (!this.active || !this.boss?.active) return;
-    const def = BOSSES[this.bossIndex];
+    const def = this.options.getBosses()[this.bossIndex];
+    if (!def) return;
     if (this.boss.x > 680) this.bossDirection = -1;
     if (this.boss.x < 120) this.bossDirection = 1;
     this.boss.setVelocityX(def.moveSpeed * this.bossDirection);
@@ -115,7 +124,8 @@ export class BossController {
 
   private shoot = () => {
     if (!this.boss || !this.boss.active) return;
-    const def = BOSSES[this.bossIndex];
+    const def = this.options.getBosses()[this.bossIndex];
+    if (!def) return;
     this.bossShotCount++;
 
     if (def.pattern === "aimed") {
@@ -188,8 +198,10 @@ export class BossController {
     }
   };
 
-  // chefe atual derrotado: avança pro próximo, ou vence o jogo se era o último
+  // chefe atual derrotado: avança pro próximo da fase, ou avisa que a
+  // fase acabou (se era o último chefe da lista atual)
   private defeat() {
+    const bosses = this.options.getBosses();
     this.bossShootTimer?.remove();
     this.boss?.destroy();
     this.options.onScoreChange(100);
@@ -197,12 +209,12 @@ export class BossController {
 
     const nextIndex = this.bossIndex + 1;
 
-    if (nextIndex < BOSSES.length) {
-      this.options.hud.setBossLabelText(`${BOSSES[this.bossIndex].name} DERROTADO!`);
+    if (nextIndex < bosses.length) {
+      this.options.hud.setBossLabelText(`${bosses[this.bossIndex].name} DERROTADO!`);
       this.scene.time.delayedCall(2000, () => this.spawn(nextIndex));
     } else {
       this.active = false;
-      this.options.onAllBossesDefeated();
+      this.options.onPhaseBossesDefeated();
     }
   }
 }

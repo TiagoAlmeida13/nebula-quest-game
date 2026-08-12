@@ -14,9 +14,8 @@ import {
   CRYSTALS_PER_POWER_LEVEL,
   MAX_POWER_LEVEL,
   CRYSTALS_PER_SHIELD,
-  WAVES,
-  BOSSES,
 } from "../config/gameConfig";
+import { PHASES, PhaseDef } from "../config/phases";
 import { InputController } from "../systems/InputController";
 import { WaveSpawner } from "../systems/WaveSpawner";
 import { BossController } from "../entities/BossController";
@@ -46,23 +45,45 @@ export default class MainScene extends Phaser.Scene {
   private shields = 0;
   private invulnerableUntil = 0;
   private lastShot = 0;
+  private phaseIndex = 0;
 
   constructor() {
     super("MainScene");
   }
 
+  private get phase(): PhaseDef {
+    return PHASES[this.phaseIndex];
+  }
+
   preload() {
     createShipTexture(this, "player", 40, 44, COLORS.player);
-    createEnemyShipTexture(this, "enemy", 32, 36, COLORS.enemy);
-    BOSSES.forEach((def, i) => {
-      createBossTexture(this, `boss${i}`, 90, 80, def.color);
-    });
     createTexture(this, "bullet", 5, 14, COLORS.bullet);
     createTexture(this, "bossBullet", 8, 16, 0xffffff);
     createTexture(this, "enemyBullet", 5, 12, 0xa239ea);
     createTexture(this, "crystal", 18, 18, COLORS.crystal);
     createTexture(this, "spark", 6, 6, COLORS.spark);
-    createStarTexture(this);
+
+    // Cada fase tem seu próprio visual (fundo, cor dos inimigos) e seus
+    // próprios chefes, então geramos as texturas de todas as fases de uma
+    // vez no preload.
+    PHASES.forEach((phase) => {
+      createStarTexture(
+        this,
+        phase.starTextureKey,
+        phase.starBgColor,
+        phase.starColor,
+      );
+      createEnemyShipTexture(
+        this,
+        phase.enemyTextureKey,
+        32,
+        36,
+        phase.enemyColor,
+      );
+      phase.bosses.forEach((def) => {
+        createBossTexture(this, def.textureKey, 90, 80, def.color);
+      });
+    });
   }
 
   create() {
@@ -73,12 +94,13 @@ export default class MainScene extends Phaser.Scene {
     this.shields = 0;
     this.invulnerableUntil = 0;
     this.lastShot = 0;
+    this.phaseIndex = 0;
 
     this.sfx.stopMusic();
     this.sfx.startMusic();
 
     this.starfield = this.add
-      .tileSprite(400, 240, 800, 480, "stars")
+      .tileSprite(400, 240, 800, 480, this.phase.starTextureKey)
       .setDepth(-1);
 
     this.player = this.physics.add.sprite(400, 420, "player");
@@ -154,7 +176,8 @@ export default class MainScene extends Phaser.Scene {
       onRestart: () => this.scene.restart(),
     });
     this.hud.create();
-    this.hud.setWave(0, WAVES.length);
+    this.hud.setPhaseLabel(`Fase ${this.phase.id}`);
+    this.hud.setWave(0, this.phase.waves.length);
 
     // --- Input (teclado + toque/arraste) ---
     this.input_ = new InputController(this, {
@@ -179,6 +202,7 @@ export default class MainScene extends Phaser.Scene {
     // --- Chefes ---
     this.bossController = new BossController(this, {
       getPlayer: () => this.player,
+      getBosses: () => this.phase.bosses,
       bullets: this.bullets,
       bossBullets: this.bossBullets,
       enemies: this.enemies,
@@ -186,7 +210,7 @@ export default class MainScene extends Phaser.Scene {
       sfx: this.sfx,
       onScoreChange: (delta) => this.addScore(delta),
       onPlayerHit: this.hitPlayer as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-      onAllBossesDefeated: () => this.winGame(),
+      onPhaseBossesDefeated: () => this.advancePhaseOrWin(),
     });
     this.bossController.reset();
 
@@ -196,6 +220,8 @@ export default class MainScene extends Phaser.Scene {
       crystals: this.crystals,
       isGameOver: () => this.gameOver,
       isBossActive: () => this.bossController.active,
+      getWaves: () => this.phase.waves,
+      getEnemyTextureKey: () => this.phase.enemyTextureKey,
       onWaveChange: (current, total) => this.hud.setWave(current, total),
       onWavesComplete: () => this.bossController.spawn(0),
     });
@@ -205,6 +231,34 @@ export default class MainScene extends Phaser.Scene {
   private addScore(delta: number) {
     this.score += delta;
     this.hud.setScore(this.score);
+  }
+
+  /** Chamado pelo BossController quando os chefes da fase atual acabam. */
+  private advancePhaseOrWin() {
+    const nextIndex = this.phaseIndex + 1;
+
+    if (nextIndex >= PHASES.length) {
+      this.winGame();
+      return;
+    }
+
+    const nextPhase = PHASES[nextIndex];
+    this.hud.hideBoss();
+    this.hud.showStatus(`🚀 ${nextPhase.label}`);
+
+    this.time.delayedCall(2200, () => this.startPhase(nextIndex));
+  }
+
+  private startPhase(index: number) {
+    this.phaseIndex = index;
+    const phase = this.phase;
+
+    this.starfield.setTexture(phase.starTextureKey);
+    this.hud.setPhaseLabel(`Fase ${phase.id}`);
+    this.hud.showStatus("");
+
+    this.bossController.reset();
+    this.waveSpawner.startWaves();
   }
 
   shoot(time: number) {
@@ -304,8 +358,8 @@ export default class MainScene extends Phaser.Scene {
 
   winGame() {
     if (this.gameOver) return;
-    this.endGame("VOCÊ DERROTOU OS 3 GUARDIÕES DO VAZIO! 🎉");
-    this.hud.clearBossLabel();
+    this.endGame("VOCÊ DERROTOU TODOS OS GUARDIÕES! 🎉");
+    this.hud.hideBoss();
     this.sfx.win();
   }
 
