@@ -142,6 +142,51 @@ const PHASE_2_BOSSES: BossDef[] = [
   },
 ];
 
+// Fase 3: núcleo do buraco negro — a mais difícil. Visual sombrio/dourado,
+// ondas mais densas e rápidas, inimigos atirando com mais frequência, e
+// chefes com muito mais vida e cadência de tiro agressiva.
+const PHASE_3_WAVES: WaveDef[] = [
+  { type: "zigzagSquad", count: 8, speed: 200, gapAfter: 2100, shootChance: 0.65 },
+  { type: "diagonal", count: 8, speed: 210, gapAfter: 2000, shootChance: 0.7 },
+  { type: "v", count: 9, speed: 220, gapAfter: 1900, shootChance: 0.7 },
+  { type: "line", count: 10, speed: 230, gapAfter: 1900, shootChance: 0.75 },
+  { type: "zigzagSquad", count: 9, speed: 230, gapAfter: 1800, shootChance: 0.75 },
+  { type: "diagonal", count: 10, speed: 240, gapAfter: 1700, shootChance: 0.8 },
+  { type: "v", count: 10, speed: 250, gapAfter: 1600, shootChance: 0.8 },
+  { type: "zigzagSquad", count: 11, speed: 260, gapAfter: 1500, shootChance: 0.85 },
+  { type: "line", count: 12, speed: 270, gapAfter: 1400, shootChance: 0.85 },
+];
+
+const PHASE_3_BOSSES: BossDef[] = [
+  {
+    name: "TIRANO DO ABISMO",
+    textureKey: "boss6",
+    maxHealth: 44,
+    color: 0xffd700,
+    moveSpeed: 190,
+    shootDelay: 700,
+    pattern: "mixed",
+  },
+  {
+    name: "SINGULARIDADE VIVA",
+    textureKey: "boss7",
+    maxHealth: 54,
+    color: 0x8a2be2,
+    moveSpeed: 210,
+    shootDelay: 600,
+    pattern: "spread",
+  },
+  {
+    name: "OLHO DO NADA ETERNO",
+    textureKey: "boss8",
+    maxHealth: 66,
+    color: 0xff003c,
+    moveSpeed: 230,
+    shootDelay: 500,
+    pattern: "aimed",
+  },
+];
+
 export const PHASES: PhaseDef[] = [
   {
     id: 1,
@@ -164,5 +209,16 @@ export const PHASES: PhaseDef[] = [
     enemyTextureKey: "enemy_phase2",
     waves: PHASE_2_WAVES,
     bosses: PHASE_2_BOSSES,
+  },
+  {
+    id: 3,
+    label: "Fase 3 · Núcleo do Vazio",
+    starBgColor: 0x050208,
+    starColor: 0xffd700,
+    starTextureKey: "stars_phase3",
+    enemyColor: 0x8a2be2,
+    enemyTextureKey: "enemy_phase3",
+    waves: PHASE_3_WAVES,
+    bosses: PHASE_3_BOSSES,
   },
 ];
