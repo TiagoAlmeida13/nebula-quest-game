@@ -6,6 +6,7 @@ import {
   createShipTexture,
   createEnemyShipTexture,
   createBossTexture,
+  createCrystalTexture,
 } from "../lib/textures";
 import {
   COLORS,
@@ -60,7 +61,7 @@ export default class MainScene extends Phaser.Scene {
     createTexture(this, "bullet", 5, 14, COLORS.bullet);
     createTexture(this, "bossBullet", 8, 16, 0xffffff);
     createTexture(this, "enemyBullet", 5, 12, 0xa239ea);
-    createTexture(this, "crystal", 18, 18, COLORS.crystal);
+    createCrystalTexture(this, "crystal", 20, 24, COLORS.crystal);
     createTexture(this, "spark", 6, 6, COLORS.spark);
 
     // Cada fase tem seu próprio visual (fundo, cor dos inimigos) e seus
