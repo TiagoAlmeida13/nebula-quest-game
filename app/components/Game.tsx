@@ -46,8 +46,10 @@ export default function Game() {
   }, []);
 
   return (
-    <div className="game-shell touch-none">
-      <div ref={containerRef} className="game-canvas-box" />
-    </div>
-  );
+  <div
+    ref={containerRef}
+    className="mx-auto w-full max-w-[800px] touch-none"
+    style={{ aspectRatio: "800 / 480" }}
+  />
+);
 }
